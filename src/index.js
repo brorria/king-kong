@@ -1,5 +1,7 @@
 // chargement des librairies
 
+var player;
+
 /***********************************************************************/
 /** CONFIGURATION GLOBALE DU JEU ET LANCEMENT 
 /***********************************************************************/
@@ -43,6 +45,12 @@ new Phaser.Game(config);
 function preload() {
   // Charge le vrai sprite de la map pour construire ensuite le prototype dessus.
   this.load.image("niveau1", "src/asset/map-base.png");
+
+  // Charge Mario en spritesheet pour pouvoir reutiliser les frames plus tard.
+  this.load.spritesheet("mario", "src/asset/mario-left avec arrière-plan supprimé.png", {
+    frameWidth: 52,
+    frameHeight: 73
+  });
 }
 
 /***********************************************************************/
@@ -65,6 +73,11 @@ function create() {
   var echelle = Math.min(800 / fond.width, 600 / fond.height);
 
   fond.setScale(echelle);
+
+  // Cree Mario avec la physique Arcade, sans mouvement pour ce sous-jalon.
+  player = this.physics.add.sprite(140, 120, "mario", 0);
+  player.setScale(0.6);
+  player.setCollideWorldBounds(true);
 }
 
 /***********************************************************************/
