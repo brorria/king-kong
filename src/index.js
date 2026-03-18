@@ -20,7 +20,14 @@ var barrels;
 var barrelTimer;
 var statusText;
 var hasWon = false;
+var isGameOver = false;
+var currentLives = 3;
+var lifeIcons = [];
+var isRespawning = false;
 var barrelBeams = [];
+var endScreen;
+var endTitleText;
+var endHintText;
 
 var GAME_WIDTH = 800;
 var GAME_HEIGHT = 600;
@@ -28,10 +35,17 @@ var MOVE_SPEED = 160;
 var JUMP_SPEED = -165;
 var CLIMB_SPEED = 120;
 var INTRO_DURATION = 1800;
+var FIRST_BARREL_DELAY = 1000;
 var BARREL_SPEED = 90;
 var BARREL_DELAY = 2000;
 var BARREL_SPAWN_OFFSET_X = 45;
 var BARREL_SPAWN_OFFSET_Y = 22;
+var PLAYER_START_X = 180;
+var PLAYER_START_Y = 548;
+var LADDER_BIG_WIDTH = 10;
+var LADDER_BIG_HEIGHT = 17;
+var LADDER_SMALL_WIDTH = 10;
+var LADDER_SMALL_HEIGHT = 20;
 
 /***********************************************************************/
 /** CONFIGURATION GLOBALE DU JEU ET LANCEMENT 
@@ -50,7 +64,7 @@ var config = {
       gravity: {
         y: 520 // gravité verticale plus forte pour rapprocher le saut du jeu arcade
       },
-      debug: debugMode // passe a false quand tu veux cacher les hitbox
+      debug: false // passe a false quand tu veux cacher les hitbox
     }
   },
   scene: {
@@ -96,6 +110,7 @@ function preload() {
     frameWidth: 114,
     frameHeight: 145
   });
+  this.load.image("lifeMario", "src/asset/vie mario avec arrière-plan supprimé.png");
 
   // Charge Mario en spritesheet pour pouvoir reutiliser les frames plus tard.
   this.load.spritesheet("mario", "src/asset/mario-left avec arrière-plan supprimé.png", {
@@ -178,6 +193,30 @@ function create() {
     color: "#ffffff"
   });
 
+  creerAffichageDesVies(this);
+
+  // Notion Phaser en plus du cours : setDepth permet d'afficher
+  // l'ecran de fin au-dessus de tous les autres elements.
+  endScreen = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.8);
+  endScreen.setDepth(20);
+  endScreen.setVisible(false);
+
+  endTitleText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30, "", {
+    fontSize: "40px",
+    color: "#ffffff"
+  });
+  endTitleText.setOrigin(0.5);
+  endTitleText.setDepth(21);
+  endTitleText.setVisible(false);
+
+  endHintText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 26, "", {
+    fontSize: "18px",
+    color: "#ffffff"
+  });
+  endHintText.setOrigin(0.5);
+  endHintText.setDepth(21);
+  endHintText.setVisible(false);
+
   ladders = this.physics.add.staticGroup();
 
   // Les collisions sont posees a la main avec des rectangles invisibles
@@ -217,26 +256,33 @@ function create() {
     var centerX = mapOffsetX + (x + largeur / 2) * echelle;
     var centerY = mapOffsetY + (y + hauteur / 2) * echelle;
     var ladderZone = scene.add.rectangle(centerX, centerY, (largeur - 8) * echelle, hauteur * echelle, 0, 0);
-    var tileHeight = 18;
-    var tileCount = Math.max(1, Math.ceil(hauteur / tileHeight));
+    var ladderWidth = LADDER_BIG_WIDTH;
+    var ladderHeight = LADDER_BIG_HEIGHT;
+    var spriteCount = 2;
+
+    if (hauteur <= 16) {
+      ladderWidth = LADDER_SMALL_WIDTH;
+      ladderHeight = LADDER_SMALL_HEIGHT;
+      spriteCount = 1;
+    }
 
     scene.physics.add.existing(ladderZone, true);
     ladders.add(ladderZone);
 
-    for (var i = 0; i < tileCount; i++) {
-      var tileY = y + tileHeight / 2 + i * tileHeight;
+    for (var i = 0; i < spriteCount; i++) {
+      var spriteY = centerY;
 
-      if (tileY > y + hauteur) {
-        tileY = y + hauteur - tileHeight / 2;
+      if (spriteCount > 1) {
+        spriteY = centerY + (i - 0.5) * ladderHeight * echelle + 8;
       }
 
       var ladderSprite = scene.add.image(
-        mapOffsetX + (x + largeur / 2) * echelle,
-        mapOffsetY + tileY * echelle,
+        centerX,
+        spriteY,
         "ladder"
       );
 
-      ladderSprite.setDisplaySize((largeur - 8) * echelle, tileHeight * echelle);
+      ladderSprite.setDisplaySize(ladderWidth * echelle, ladderHeight * echelle);
     }
   }
 
@@ -291,7 +337,7 @@ function create() {
   }
 
   // Cree Mario avec la physique Arcade, sans mouvement pour ce sous-jalon.
-  player = this.physics.add.sprite(180, 548, "mario", 0);
+  player = this.physics.add.sprite(PLAYER_START_X, PLAYER_START_Y, "mario", 0);
   player.setScale(0.45);
   // Notion Phaser en plus du cours : setOrigin permet ici d'aligner le bas
   // du sprite avec le haut de la plateforme.
@@ -326,6 +372,7 @@ function create() {
   pauline.setVisible(false);
   barrelStackDisplay.setVisible(false);
   statusText.setVisible(false);
+  changerVisibiliteDesVies(false);
   player.setVisible(false);
   player.body.enable = false;
 
@@ -349,6 +396,7 @@ function create() {
     pauline.setVisible(true);
     barrelStackDisplay.setVisible(true);
     statusText.setVisible(true);
+    changerVisibiliteDesVies(true);
     player.setVisible(true);
     player.body.enable = true;
 
@@ -364,10 +412,14 @@ function create() {
     // On relance l'animation ici pour la caler au debut du rythme des tonneaux.
     donkeyKong.anims.restart();
 
-    barrelTimer = sceneRef.time.addEvent({
-      delay: BARREL_DELAY,
-      loop: true,
-      callback: lancerBaril
+    sceneRef.time.delayedCall(FIRST_BARREL_DELAY, function () {
+      lancerBaril();
+
+      barrelTimer = sceneRef.time.addEvent({
+        delay: BARREL_DELAY,
+        loop: true,
+        callback: lancerBaril
+      });
     });
   });
 }
@@ -384,7 +436,18 @@ function update() {
   if (hasWon) {
     player.setVelocityX(0);
     player.setVelocityY(0);
-    mettreAJourBarils();
+    return;
+  }
+
+  if (isGameOver) {
+    player.setVelocityX(0);
+    player.setVelocityY(0);
+    return;
+  }
+
+  if (isRespawning) {
+    player.setVelocityX(0);
+    player.setVelocityY(0);
     return;
   }
 
@@ -529,20 +592,86 @@ function toucherBaril(playerSprite, barrel) {
   isClimbing = false;
   playerSprite.body.allowGravity = true;
   playerSprite.setVelocity(0, 0);
-  playerSprite.setPosition(180, 548);
-  statusText.setText("Aie ! Retour au depart");
+  statusText.setText("");
+  currentLives -= 1;
+  mettreAJourAffichageDesVies();
 
-  sceneRef.time.delayedCall(900, function () {
-    if (!hasWon) {
-      statusText.setText("");
-    }
+  if (currentLives <= 0) {
+    isGameOver = true;
+    playerSprite.body.enable = false;
+    afficherEcranDeFin("GAME OVER", "Mario n'a plus de vies");
+    return;
+  }
+
+  isRespawning = true;
+  playerSprite.body.enable = false;
+  playerSprite.setVisible(false);
+
+  sceneRef.time.delayedCall(700, function () {
+    isRespawning = false;
+    isClimbing = false;
+    playerSprite.setPosition(PLAYER_START_X, PLAYER_START_Y);
+    playerSprite.setVisible(true);
+    playerSprite.body.enable = true;
+    playerSprite.body.allowGravity = true;
+    playerSprite.setVelocity(0, 0);
   });
 }
 
 function atteindrePauline() {
   hasWon = true;
-  statusText.setText("Bravo ! Pauline est atteinte");
+  statusText.setText("");
+  player.body.enable = false;
+  afficherEcranDeFin("YOU WIN", "Pauline est atteinte");
+
   if (barrelTimer) {
     barrelTimer.remove(false);
+  }
+}
+
+function afficherEcranDeFin(titre, sousTitre) {
+  endScreen.setVisible(true);
+  endTitleText.setText(titre);
+  endTitleText.setVisible(true);
+  endHintText.setText(sousTitre);
+  endHintText.setVisible(true);
+
+  if (barrelTimer) {
+    barrelTimer.remove(false);
+  }
+
+  barrels.children.iterate(function (barrel) {
+    if (!barrel) {
+      return;
+    }
+
+    barrel.setVelocity(0, 0);
+    barrel.body.enable = false;
+  });
+}
+
+function creerAffichageDesVies(scene) {
+  var startX = 83;
+  var startY = 74;
+  var gap = 24;
+
+  lifeIcons = [];
+
+  for (var i = 0; i < 3; i++) {
+    var lifeIcon = scene.add.image(startX + i * gap, startY, "lifeMario");
+    lifeIcon.setScale(0.32);
+    lifeIcons.push(lifeIcon);
+  }
+}
+
+function mettreAJourAffichageDesVies() {
+  for (var i = 0; i < lifeIcons.length; i++) {
+    lifeIcons[i].setVisible(i < currentLives);
+  }
+}
+
+function changerVisibiliteDesVies(estVisible) {
+  for (var i = 0; i < lifeIcons.length; i++) {
+    lifeIcons[i].setVisible(estVisible && i < currentLives);
   }
 }
