@@ -28,13 +28,10 @@ var MOVE_SPEED = 160;
 var JUMP_SPEED = -165;
 var CLIMB_SPEED = 120;
 var INTRO_DURATION = 1800;
-var FIRST_BARREL_DELAY = 1000;
 var BARREL_SPEED = 90;
 var BARREL_DELAY = 2000;
 var BARREL_SPAWN_OFFSET_X = 45;
 var BARREL_SPAWN_OFFSET_Y = 22;
-var LADDER_TILE_WIDTH = 39;
-var LADDER_TILE_HEIGHT = 54;
 
 /***********************************************************************/
 /** CONFIGURATION GLOBALE DU JEU ET LANCEMENT 
@@ -80,7 +77,7 @@ function preload() {
   // Charge le vrai sprite de la map pour construire ensuite le prototype dessus.
   this.load.image("niveau1", "src/asset/vrai map 1.png");
   this.load.image("introNiveau1", "src/asset/vrai map 1.png");
-  this.load.image("ladder", "src/asset/echelle donke kong (3).png");
+  this.load.image("ladder", "src/asset/echelle avec arrière-plan supprimé.png");
   this.load.image("barrelLaunch", "src/asset/barel-normal avec arrière-plan supprimé.png");
   this.load.image("barrelStack", "src/asset/barel-normal-x4 avec arrière-plan supprimé.png");
   this.load.spritesheet("barrelRoll", "src/asset/barel-normal-lancé avec arrière-plan supprimé.png", {
@@ -220,7 +217,7 @@ function create() {
     var centerX = mapOffsetX + (x + largeur / 2) * echelle;
     var centerY = mapOffsetY + (y + hauteur / 2) * echelle;
     var ladderZone = scene.add.rectangle(centerX, centerY, (largeur - 8) * echelle, hauteur * echelle, 0, 0);
-    var tileHeight = LADDER_TILE_HEIGHT;
+    var tileHeight = 18;
     var tileCount = Math.max(1, Math.ceil(hauteur / tileHeight));
 
     scene.physics.add.existing(ladderZone, true);
@@ -234,12 +231,12 @@ function create() {
       }
 
       var ladderSprite = scene.add.image(
-        centerX,
-        centerY,
+        mapOffsetX + (x + largeur / 2) * echelle,
+        mapOffsetY + tileY * echelle,
         "ladder"
       );
 
-      ladderSprite.setDisplaySize(LADDER_TILE_WIDTH * echelle, tileHeight * echelle);
+      ladderSprite.setDisplaySize((largeur - 8) * echelle, tileHeight * echelle);
     }
   }
 
@@ -367,14 +364,10 @@ function create() {
     // On relance l'animation ici pour la caler au debut du rythme des tonneaux.
     donkeyKong.anims.restart();
 
-    sceneRef.time.delayedCall(FIRST_BARREL_DELAY, function () {
-      lancerBaril();
-
-      barrelTimer = sceneRef.time.addEvent({
-        delay: BARREL_DELAY,
-        loop: true,
-        callback: lancerBaril
-      });
+    barrelTimer = sceneRef.time.addEvent({
+      delay: BARREL_DELAY,
+      loop: true,
+      callback: lancerBaril
     });
   });
 }
