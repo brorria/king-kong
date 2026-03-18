@@ -204,6 +204,15 @@ function create() {
     }
   }
 
+  function ajouterZoneEchelle(scene, x, y, largeur, hauteur) {
+    var centerX = mapOffsetX + (x + largeur / 2) * echelle;
+    var centerY = mapOffsetY + (y + hauteur / 2) * echelle;
+    var ladderZone = scene.add.rectangle(centerX, centerY, (largeur - 8) * echelle, hauteur * echelle, 0, 0);
+
+    scene.physics.add.existing(ladderZone, true);
+    ladders.add(ladderZone);
+  }
+
   // Petite poutre du haut.
   ajouterPlateformeMap(this, 88, 56, 48, 8);
 
@@ -216,6 +225,8 @@ function create() {
   ajouterPoutreInclinee(this, 0, 222, 248, 241, 16, 8);
 
   // Echelles visuelles et detectables, calees sur la capture de reference.
+  ajouterZoneEchelle(this, 76, 32, 16, 50);
+  ajouterZoneEchelle(this, 60, 32, 16, 50);
   ajouterEchelle(this, 111, 80, 19, 30);
   ajouterEchelle(this, 78, 118, 19, 28);
   ajouterEchelle(this, 145, 134, 19, 16);
