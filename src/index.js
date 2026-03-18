@@ -21,6 +21,13 @@ var paulineGoal;
 var barrels;
 var barrelTimer;
 var firstBarrelTimer;
+var introMusic;
+var inGameMusic;
+var kongClimbSound;
+var donkeyKongThrowSounds = [];
+var marioDeathSounds = [];
+var gameOverSound;
+var paulineSounds = [];
 var statusText;
 var scoreText;
 var isGameOver = false;
@@ -109,6 +116,19 @@ function preload() {
   this.load.image("niveau1", "src/asset/vrai map 1.png");
   this.load.image("introNiveau1", "src/asset/vrai map 1.png");
   this.load.image("startScreen", "src/asset/image debu king kong - copie 2.png");
+  this.load.audio("introMusic", "src/son donkey-kong/son intro.m4a");
+  this.load.audio("inGameMusic", "src/son donkey-kong/son in game.m4a");
+  this.load.audio("kongClimbSound", "src/son donkey-kong/kong qui grimpe.m4a");
+  this.load.audio("dkThrow1", "src/son donkey-kong/son dk1.m4a");
+  this.load.audio("dkThrow2", "src/son donkey-kong/son dk2.m4a");
+  this.load.audio("dkThrow3", "src/son donkey-kong/son dk3.m4a");
+  this.load.audio("marioDeath1", "src/son donkey-kong/son mario death 1 .m4a");
+  this.load.audio("marioDeath2", "src/son donkey-kong/son mario death 2 .m4a");
+  this.load.audio("marioDeath3", "src/son donkey-kong/son mario death 3.m4a");
+  this.load.audio("gameOverSound", "src/son donkey-kong/son de fin ( mort ) .m4a");
+  this.load.audio("pauline1", "src/son donkey-kong/pauline 1.m4a");
+  this.load.audio("pauline2", "src/son donkey-kong/pauline 2.m4a");
+  this.load.audio("pauline3", "src/son donkey-kong/pauline 3.m4a");
   this.load.image("ladder", "src/asset/echelle avec arrière-plan supprimé.png");
   this.load.image("barrelLaunch", "src/asset/barel-normal avec arrière-plan supprimé.png");
   this.load.image("barrelStack", "src/asset/barel-normal-x4 avec arrière-plan supprimé.png");
@@ -321,6 +341,42 @@ function create() {
   startScreenDonkeyKong.setDepth(15);
   startScreenDonkeyKong.setVisible(false);
   startScreenDonkeyKong.anims.play("dk-start-angry");
+
+  // Le son d'accueil est prepare ici, mais selon le navigateur
+  // il faut parfois une premiere interaction utilisateur avant lecture.
+  introMusic = this.sound.add("introMusic");
+  inGameMusic = this.sound.add("inGameMusic");
+  kongClimbSound = this.sound.add("kongClimbSound");
+  donkeyKongThrowSounds = [
+    this.sound.add("dkThrow1"),
+    this.sound.add("dkThrow2"),
+    this.sound.add("dkThrow3")
+  ];
+  marioDeathSounds = [
+    this.sound.add("marioDeath1"),
+    this.sound.add("marioDeath3")
+  ];
+  gameOverSound = this.sound.add("gameOverSound");
+  paulineSounds = [
+    this.sound.add("pauline1"),
+    this.sound.add("pauline2"),
+    this.sound.add("pauline3")
+  ];
+
+  function jouerMusiqueAccueil() {
+    if (!introMusic.isPlaying) {
+      introMusic.play({
+        loop: true,
+        volume: 0.6
+      });
+    }
+  }
+
+  if (this.sound.locked) {
+    this.input.once("pointerdown", jouerMusiqueAccueil);
+  } else {
+    jouerMusiqueAccueil();
+  }
 
   startMenuOverlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.45);
   startMenuOverlay.setDepth(15);
@@ -558,6 +614,18 @@ function create() {
     isIntroPlaying = false;
     startScreenImage.setVisible(false);
     startScreenDonkeyKong.setVisible(false);
+    if (introMusic && introMusic.isPlaying) {
+      introMusic.stop();
+    }
+    if (kongClimbSound && kongClimbSound.isPlaying) {
+      kongClimbSound.stop();
+    }
+    if (inGameMusic && !inGameMusic.isPlaying) {
+      inGameMusic.play({
+        loop: true,
+        volume: 0.5
+      });
+    }
     statusText.setVisible(true);
     scoreText.setVisible(true);
     changerVisibiliteDesVies(true);
@@ -585,6 +653,12 @@ function create() {
   function jouerSceneOuverture() {
     // Reproduction simplifiee de la scene d'ouverture :
     // Donkey Kong grimpe avec Pauline jusqu'en haut.
+    if (kongClimbSound) {
+      kongClimbSound.play({
+        volume: 0.6
+      });
+    }
+
     var cheminOuverture = [
       { x: coordXMap(112), y: coordYMap(223), duration: 850 },
       { x: coordXMap(112), y: coordYMap(190), duration: 700 },
@@ -635,15 +709,16 @@ function create() {
       return;
     }
 
+    if (introMusic) {
+      introMusic.stop();
+    }
+
     startScreenImage.setVisible(false);
     startScreenDonkeyKong.setVisible(false);
     jouerSceneOuverture();
   }
 
-  startButtonBg.on("pointerdown", demarrerSequenceDebut);
   startButtonText.setInteractive({ useHandCursor: true });
-  startButtonText.on("pointerdown", demarrerSequenceDebut);
-  startScreenImage.on("pointerdown", demarrerSequenceDebut);
   this.input.keyboard.on("keydown-SPACE", demarrerSequenceDebut);
   this.input.keyboard.on("keydown-R", relancerPartie);
 
@@ -800,6 +875,14 @@ function lancerBaril() {
     return;
   }
 
+  var randomSound = Phaser.Utils.Array.GetRandom(donkeyKongThrowSounds);
+
+  if (randomSound) {
+    randomSound.play({
+      volume: 0.5
+    });
+  }
+
   // Le point de sortie est decale pour que le baril parte
   // de la main de Donkey Kong sur la derniere frame de lancer.
   var barrel = barrels.create(
@@ -837,7 +920,8 @@ function getBarrelBeam(x, y) {
 
 function toucherBaril(playerSprite, barrel) {
   // Une collision baril/Mario retire une vie.
-  // Si c'etait la derniere, on joue la mort puis GAME OVER.
+  // On joue d'abord un son de blessure a chaque coup.
+  // Si c'etait la derniere, on joue ensuite le vrai son de GAME OVER.
   barrel.destroy();
   isClimbing = false;
   playerSprite.body.allowGravity = true;
@@ -846,12 +930,25 @@ function toucherBaril(playerSprite, barrel) {
   currentLives -= 1;
   mettreAJourAffichageDesVies();
 
+  var randomDeathSound = Phaser.Utils.Array.GetRandom(marioDeathSounds);
+  if (randomDeathSound) {
+    randomDeathSound.play({
+      volume: 0.5
+    });
+  }
+
   if (currentLives <= 0) {
     isGameOver = true;
     playerSprite.body.enable = false;
     playerSprite.anims.stop();
     playerSprite.setTexture("marioDie", 0);
     playerSprite.setScale(0.72);
+    if (gameOverSound) {
+      gameOverSound.play({
+        volume: 0.6
+      });
+    }
+
     playerSprite.play("mario-die");
 
     sceneRef.time.delayedCall(700, function () {
@@ -880,6 +977,14 @@ function toucherBaril(playerSprite, barrel) {
 function atteindrePauline() {
   // Pauline ne termine plus la partie tout de suite.
   // Elle valide un tour, ajoute du score, puis augmente la difficulte.
+  var randomPaulineSound = Phaser.Utils.Array.GetRandom(paulineSounds);
+
+  if (randomPaulineSound) {
+    randomPaulineSound.play({
+      volume: 0.6
+    });
+  }
+
   if (currentRound >= targetRounds) {
     ajouterScoreDeTour();
     isGameOver = true;
@@ -907,6 +1012,10 @@ function afficherEcranDeFin(titre, sousTitre) {
 
   if (barrelTimer) {
     barrelTimer.remove(false);
+  }
+
+  if (inGameMusic && inGameMusic.isPlaying) {
+    inGameMusic.stop();
   }
 
   barrels.children.iterate(function (barrel) {
@@ -1032,6 +1141,17 @@ function relancerPartie() {
   if (barrelTimer) {
     barrelTimer.remove(false);
     barrelTimer = null;
+  }
+
+  if (introMusic && introMusic.isPlaying) {
+    introMusic.stop();
+  }
+
+  if (inGameMusic && !inGameMusic.isPlaying) {
+    inGameMusic.play({
+      loop: true,
+      volume: 0.5
+    });
   }
 
   barrels.children.iterate(function (barrel) {
