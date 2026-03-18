@@ -1,5 +1,6 @@
-// chargement des librairies
-
+// Variables globales du jeu.
+// On les garde en haut pour que preload, create et update
+// puissent partager le meme etat simplement.
 var player;
 var platforms;
 var cursors;
@@ -103,7 +104,8 @@ new Phaser.Game(config);
  * On y trouve surtout le chargement des assets (images, son ..)
  */
 function preload() {
-  // Charge le vrai sprite de la map pour construire ensuite le prototype dessus.
+  // Charge toutes les images avant create().
+  // On separe bien les assets par usage : map, personnages, UI et animations.
   this.load.image("niveau1", "src/asset/vrai map 1.png");
   this.load.image("introNiveau1", "src/asset/vrai map 1.png");
   this.load.image("startScreen", "src/asset/image debu king kong - copie 2.png");
@@ -161,18 +163,20 @@ function preload() {
 function create() {
   sceneRef = this;
 
-  // Garde un fond noir proche du rendu arcade pendant le développement.
+  // Fond noir simple pour rester proche du rendu arcade
+  // et eviter les bords blancs autour des assets.
   this.cameras.main.setBackgroundColor("#000000");
 
-  // Notion Phaser en plus du cours : on garde le ratio du sprite et on le centre
-  // pour éviter de déformer la vraie map.
+  // On garde le ratio de la map pour ne pas l'etirer.
+  // C'est plus propre visuellement que de forcer l'image au format ecran.
   gameplayMap = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "niveau1");
   var echelle = Math.min(GAME_WIDTH / gameplayMap.width, GAME_HEIGHT / gameplayMap.height);
 
   gameplayMap.setScale(echelle);
 
-  // Place les personnages principaux avec un recadrage simple pour
-  // n'afficher qu'une seule pose utile de chaque planche de sprites.
+  // Place les personnages fixes du niveau.
+  // Ils existent des le debut de la scene, mais ils sont parfois caches
+  // pendant l'ecran d'accueil et la sequence d'ouverture.
   donkeyKong = this.add.sprite(236, 158, "dkTurn", 0);
   donkeyKong.setScale(0.48);
 
@@ -182,9 +186,13 @@ function create() {
   barrelStackDisplay = this.add.image(168, 154, "barrelStack");
   barrelStackDisplay.setScale(0.46);
 
+  // Pauline n'est pas prise directement comme zone de victoire.
+  // On cree une petite zone separee pour avoir une collision plus propre.
   paulineGoal = this.add.rectangle(361, 121, 26, 36, 0x00ff00, 0);
   this.physics.add.existing(paulineGoal, true);
 
+  // Toutes les animations sont creees une seule fois dans create().
+  // Ensuite on les joue au bon moment selon l'etat du jeu.
   this.anims.create({
     key: "barrel-roll",
     frames: this.anims.generateFrameNumbers("barrelRoll", { start: 0, end: 3 }),
@@ -260,20 +268,25 @@ function create() {
   donkeyKong.anims.play("dk-gameplay");
   pauline.anims.play("pauline-intro");
 
+  // Petit texte libre pour afficher des infos de tour ou d'etat.
   statusText = this.add.text(18, 18, "", {
     fontSize: "18px",
     color: "#ffffff"
   });
 
+  // Affichage du score total.
+  // Il sera mis a jour a chaque fois que Mario atteint Pauline.
   scoreText = this.add.text(180, 25, "000000", {
     fontSize: "22px",
     color: "#ffffff"
   });
 
+  // Les vies sont creees comme 3 images separees pour simplifier
+  // leur masquage quand Mario en perd une.
   creerAffichageDesVies(this);
 
-  // Notion Phaser en plus du cours : setDepth permet d'afficher
-  // l'ecran de fin au-dessus de tous les autres elements.
+  // Ecran de fin par-dessus le reste du jeu.
+  // On utilise setDepth pour etre sur qu'il passe devant tout.
   endScreen = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.8);
   endScreen.setDepth(20);
   endScreen.setVisible(false);
@@ -294,6 +307,9 @@ function create() {
   endHintText.setDepth(21);
   endHintText.setVisible(false);
 
+  // Ecran d'accueil.
+  // Ici on affiche l'image de start fournie par l'utilisateur
+  // et un Donkey Kong anime pose dessus.
   startScreenImage = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "startScreen");
   startScreenImage.setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
   startScreenImage.setDepth(14);
@@ -324,15 +340,19 @@ function create() {
   startButtonText.setDepth(17);
   startButtonText.setVisible(false);
 
+  // Groupes physiques principaux du niveau.
+  // staticGroup est adapte ici car poutres et echelles ne bougent pas.
   ladders = this.physics.add.staticGroup();
 
-  // Les collisions sont posees a la main avec des rectangles invisibles
-  // pour rester simples a comprendre et a regler.
+  // Les collisions sont posees a la main avec des rectangles invisibles.
+  // C'est plus simple a regler qu'un systeme de tiles ou de pentes reelles.
   platforms = this.physics.add.staticGroup();
   var mapOffsetX = (GAME_WIDTH - gameplayMap.displayWidth) / 2;
   var mapOffsetY = (GAME_HEIGHT - gameplayMap.displayHeight) / 2;
 
   function ajouterPlateformeMap(scene, x, y, largeur, hauteur) {
+    // Convertit des coordonnees "map arcade" en coordonnees Phaser.
+    // Cela permet de placer plus facilement les hitbox a partir de l'image.
     var plateforme = scene.add.rectangle(
       mapOffsetX + (x + largeur / 2) * echelle,
       mapOffsetY + (y + hauteur / 2) * echelle,
@@ -347,6 +367,8 @@ function create() {
   }
 
   function ajouterPoutreInclinee(scene, xDebut, xFin, yDebut, yFin, largeurSegment, hauteur) {
+    // Une poutre inclinee est reconstruite avec plusieurs petits rectangles.
+    // On garde des hitbox droites car Arcade Physics ne gere pas les vraies pentes.
     var x = xDebut;
 
     while (x <= xFin) {
@@ -360,6 +382,9 @@ function create() {
   }
 
   function ajouterEchelle(scene, x, y, largeur, hauteur) {
+    // Une echelle a 2 parties :
+    // 1. une zone de collision invisible pour grimper
+    // 2. un ou plusieurs sprites visuels pour l'affichage
     var centerX = mapOffsetX + (x + largeur / 2) * echelle;
     var centerY = mapOffsetY + (y + hauteur / 2) * echelle;
     var ladderZone = scene.add.rectangle(centerX, centerY, (largeur - 8) * echelle, hauteur * echelle, 0, 0);
@@ -367,6 +392,8 @@ function create() {
     var ladderHeight = LADDER_BIG_HEIGHT;
     var spriteCount = 2;
 
+    // Les petites echelles "cassees" gardent une taille plus courte
+    // pour rester proches du decor arcade.
     if (hauteur <= 16) {
       ladderWidth = LADDER_SMALL_WIDTH;
       ladderHeight = LADDER_SMALL_HEIGHT;
@@ -394,6 +421,8 @@ function create() {
   }
 
   function ajouterZoneEchelle(scene, x, y, largeur, hauteur) {
+    // Variante utile quand l'echelle est deja dessinee dans la map :
+    // on garde seulement la hitbox sans rajouter de sprite visible.
     var centerX = mapOffsetX + (x + largeur / 2) * echelle;
     var centerY = mapOffsetY + (y + hauteur / 2) * echelle;
     var ladderZone = scene.add.rectangle(centerX, centerY, (largeur - 8) * echelle, hauteur * echelle, 0, 0);
@@ -403,9 +432,11 @@ function create() {
   }
 
   // Petite poutre du haut.
+  // Elle est separee car elle ne suit pas la meme pente que les autres.
   ajouterPlateformeMap(this, 88, 56, 48, 8);
 
   // Poutres principales recalees sur la vraie map jouable.
+  // Chaque appel reconstruit un etage du niveau.
   ajouterPoutreInclinee(this, 0, 207, 84, 88, 16, 8);
   ajouterPoutreInclinee(this, 16, 222, 121, 109, 16, 8);
   ajouterPoutreInclinee(this, 0, 207, 142, 154, 16, 8);
@@ -413,7 +444,8 @@ function create() {
   ajouterPoutreInclinee(this, 0, 207, 208, 220, 16, 8);
   ajouterPoutreInclinee(this, 0, 222, 248, 241, 16, 8);
 
-  // Echelles visuelles et detectables, calees sur la capture de reference.
+  // Echelles placees a la main a partir de la capture de reference.
+  // Certaines sont completes, d'autres sont "cassees".
   ajouterZoneEchelle(this, 76, 32, 16, 50);
   ajouterZoneEchelle(this, 60, 32, 16, 50);
   ajouterEchelle(this, 111, 80, 19, 30);
@@ -434,6 +466,8 @@ function create() {
   ];
 
   function creerPoutreBaril(xDebut, xFin, yDebut, yFin, direction) {
+    // Ces donnees servent uniquement a guider les barils.
+    // On separe cette logique des plateformes pour regler la trajectoire plus facilement.
     return {
       xStart: mapOffsetX + xDebut * echelle,
       xEnd: mapOffsetX + xFin * echelle,
@@ -443,7 +477,8 @@ function create() {
     };
   }
 
-  // Cree Mario avec la physique Arcade, sans mouvement pour ce sous-jalon.
+  // Mario est cree comme sprite physique.
+  // On garde une hitbox manuelle car le dessin ne remplit pas toute l'image.
   player = this.physics.add.sprite(PLAYER_START_X, PLAYER_START_Y, "marioStand");
   player.setScale(0.45);
   // Notion Phaser en plus du cours : setOrigin permet ici d'aligner le bas
@@ -455,19 +490,23 @@ function create() {
   player.body.setOffset(13, 31);
   player.setCollideWorldBounds(true);
 
+  // Groupe de barils dynamiques.
+  // Chaque baril est gere individuellement dans update().
   barrels = this.physics.add.group({
     allowGravity: true
   });
 
-  // Empeche Mario de traverser les poutres du niveau.
-  // Pendant la grimpe, on coupe temporairement cette collision.
+  // Collision Mario/poutres.
+  // On la coupe temporairement pendant la grimpe pour eviter les blocages sur les echelles.
   platformCollider = this.physics.add.collider(player, platforms, null, function () {
     return !isClimbing;
   });
 
-  // Cree les controles clavier pour le deplacement horizontal.
+  // Clavier principal du jeu.
   cursors = this.input.keyboard.createCursorKeys();
 
+  // Les overlaps servent ici pour des interactions non bloquantes :
+  // toucher Pauline ou se faire toucher par un baril.
   this.physics.add.collider(barrels, platforms);
   this.physics.add.overlap(player, paulineGoal, atteindrePauline, null, this);
   this.physics.add.overlap(player, barrels, toucherBaril, null, this);
@@ -481,6 +520,8 @@ function create() {
   }
 
   function masquerNiveauPourOuverture() {
+    // Cache et desactive le niveau pendant l'accueil et la sequence d'intro.
+    // Cela evite qu'un baril ou Mario bouge avant que la partie commence vraiment.
     donkeyKong.setVisible(false);
     pauline.setVisible(false);
     barrelStackDisplay.setVisible(false);
@@ -501,11 +542,15 @@ function create() {
   }
 
   function afficherMenuDebut() {
+    // L'accueil reste volontairement simple :
+    // une image de fond et Donkey Kong anime.
     startScreenImage.setVisible(true);
     startScreenDonkeyKong.setVisible(true);
   }
 
   function lancerNiveauJouable() {
+    // Cette fonction marque le vrai debut d'une partie jouable.
+    // Elle reactive le decor, Mario, les vies, le score et le cycle des barils.
     if (!isIntroPlaying) {
       return;
     }
@@ -538,6 +583,8 @@ function create() {
   }
 
   function jouerSceneOuverture() {
+    // Reproduction simplifiee de la scene d'ouverture :
+    // Donkey Kong grimpe avec Pauline jusqu'en haut.
     var cheminOuverture = [
       { x: coordXMap(112), y: coordYMap(223), duration: 850 },
       { x: coordXMap(112), y: coordYMap(190), duration: 700 },
@@ -553,6 +600,8 @@ function create() {
     introClimber.anims.play("dk-climb");
 
     function jouerEtape(index) {
+      // On enchaine plusieurs tweens simples plutot qu'une seule grande trajectoire.
+      // C'est plus facile a comprendre et a ajuster ensuite.
       if (index >= cheminOuverture.length) {
         introClimber.destroy();
         donkeyKong.setVisible(true);
@@ -580,6 +629,8 @@ function create() {
   }
 
   function demarrerSequenceDebut() {
+    // L'accueil lance uniquement la sequence d'ouverture.
+    // Le niveau jouable commence ensuite automatiquement.
     if (!isIntroPlaying || introClimber) {
       return;
     }
@@ -605,6 +656,8 @@ function create() {
 /***********************************************************************/
 
 function update() {
+  // update() gere seulement le niveau jouable.
+  // Si on est sur l'accueil, un ecran de fin ou un respawn, on sort vite.
   if (isIntroPlaying) {
     return;
   }
@@ -621,6 +674,7 @@ function update() {
     return;
   }
 
+  // overlap detecte si Mario est sur une echelle sans le bloquer.
   isOnLadder = sceneRef.physics.overlap(player, ladders);
 
   if (isOnLadder && (cursors.up.isDown || cursors.down.isDown)) {
@@ -634,6 +688,8 @@ function update() {
   }
 
   if (isClimbing) {
+    // Quand Mario grimpe, on coupe sa gravite et on n'utilise plus
+    // l'animation de marche.
     player.body.allowGravity = false;
     player.setVelocityX(0);
 
@@ -649,8 +705,8 @@ function update() {
       player.setTexture("marioStand");
     }
 
-    // On continue a mettre a jour les barils meme quand Mario grimpe,
-    // sinon leur comportement depend de l'etat du joueur.
+    // On continue a mettre a jour les barils meme ici,
+    // sinon leur comportement dependrait du joueur.
     mettreAJourBarils();
     return;
   }
@@ -673,8 +729,7 @@ function update() {
     player.setTexture("marioStand");
   }
 
-  // Le saut reste volontairement simple : Mario saute seulement s'il est pose
-  // sur une plateforme, ce qui evite le double saut infini.
+  // Le saut est limite au sol pour eviter le double saut infini.
   if (cursors.up.isDown && player.body.blocked.down) {
     player.setVelocityY(JUMP_SPEED);
   }
@@ -683,6 +738,8 @@ function update() {
 }
 
 function mettreAJourBarils() {
+  // Toute la logique des barils est centralisee ici.
+  // Cela evite de la disperser dans plusieurs callbacks de collision.
   barrels.children.iterate(function (barrel) {
     if (!barrel) {
       return;
@@ -693,6 +750,8 @@ function mettreAJourBarils() {
       return;
     }
 
+    // On identifie la poutre courante pour savoir dans quel sens
+    // le baril doit rouler.
     var poutreBaril = getBarrelBeam(barrel.x, barrel.y);
 
     if (!poutreBaril) {
@@ -711,8 +770,8 @@ function mettreAJourBarils() {
         barrel.body.setOffset(17, 42);
       }
 
-      // Force l'animation du spritesheet pendant tout le roulement,
-      // meme quand le baril repart vers la droite.
+      // On force l'animation tant que le baril roule,
+      // puis on retourne le sprite selon la direction.
       barrel.anims.play("barrel-roll", true);
       barrel.setFlipX(poutreBaril.direction > 0);
 
@@ -735,6 +794,8 @@ function mettreAJourBarils() {
 }
 
 function lancerBaril() {
+  // Cree un nouveau baril a la main de Donkey Kong.
+  // Les offsets servent a le faire partir du bon endroit visuellement.
   if (isIntroPlaying || isGameOver) {
     return;
   }
@@ -758,6 +819,8 @@ function lancerBaril() {
 }
 
 function getBarrelBeam(x, y) {
+  // Cherche sur quelle poutre se trouve un baril.
+  // On prend une marge pour rendre la detection plus stable.
   for (var i = 0; i < barrelBeams.length; i++) {
     if (
       x >= barrelBeams[i].xStart - BARREL_BEAM_MARGIN &&
@@ -773,6 +836,8 @@ function getBarrelBeam(x, y) {
 }
 
 function toucherBaril(playerSprite, barrel) {
+  // Une collision baril/Mario retire une vie.
+  // Si c'etait la derniere, on joue la mort puis GAME OVER.
   barrel.destroy();
   isClimbing = false;
   playerSprite.body.allowGravity = true;
@@ -813,6 +878,8 @@ function toucherBaril(playerSprite, barrel) {
 }
 
 function atteindrePauline() {
+  // Pauline ne termine plus la partie tout de suite.
+  // Elle valide un tour, ajoute du score, puis augmente la difficulte.
   if (currentRound >= targetRounds) {
     ajouterScoreDeTour();
     isGameOver = true;
@@ -830,6 +897,8 @@ function atteindrePauline() {
 }
 
 function afficherEcranDeFin(titre, sousTitre) {
+  // Meme ecran pour victoire et defaite.
+  // On fige aussi les barils pour eviter qu'ils continuent en fond.
   endScreen.setVisible(true);
   endTitleText.setText(titre);
   endTitleText.setVisible(true);
@@ -851,6 +920,8 @@ function afficherEcranDeFin(titre, sousTitre) {
 }
 
 function redemarrerDepuisLeDebut() {
+  // Sert a recommencer un nouveau tour sans remettre a zero toute la partie.
+  // On garde les vies et le score, mais on remet Mario et les barils au debut.
   isClimbing = false;
   isRespawning = false;
   player.body.enable = true;
@@ -875,10 +946,14 @@ function redemarrerDepuisLeDebut() {
 }
 
 function appliquerVitesseDeJeu() {
+  // La fonction existe pour centraliser les regles de vitesse du jeu.
+  // Pour l'instant Donkey Kong reste a vitesse normale.
   donkeyKong.anims.timeScale = 1;
 }
 
 function relancerCycleDesBarils() {
+  // Redemarre proprement le cycle des barils.
+  // On nettoie d'abord les anciens timers pour eviter les doublons.
   if (firstBarrelTimer) {
     firstBarrelTimer.remove(false);
   }
@@ -900,6 +975,8 @@ function relancerCycleDesBarils() {
 }
 
 function relancerPartie() {
+  // Restart complet avec la touche R :
+  // vies, score, tour, vitesse et barils repartent de zero.
   isGameOver = false;
   isIntroPlaying = false;
   isRespawning = false;
@@ -971,6 +1048,8 @@ function relancerPartie() {
 }
 
 function ajouterScoreDeTour() {
+  // Score du tour :
+  // (numero du tour * 100000) / temps mis en secondes
   var tempsEnSecondes = Math.max(1, Math.floor((sceneRef.time.now - roundStartTime) / 1000));
   var scoreDuTour = Math.floor((currentRound * 100000) / tempsEnSecondes);
 
@@ -979,10 +1058,12 @@ function ajouterScoreDeTour() {
 }
 
 function mettreAJourAffichageDuScore() {
+  // Petit helper pour eviter de reecrire l'affichage partout.
   scoreText.setText(formaterScore(totalScore));
 }
 
 function formaterScore(score) {
+  // Ajoute des zeros devant pour rappeler l'affichage arcade.
   var texte = String(score);
 
   while (texte.length < 6) {
@@ -993,6 +1074,8 @@ function formaterScore(score) {
 }
 
 function creerAffichageDesVies(scene) {
+  // Cree 3 icones fixes en haut a gauche.
+  // On masque simplement les images quand Mario perd des vies.
   var startX = 165;
   var startY = 66;
   var gap = 20;
@@ -1007,12 +1090,14 @@ function creerAffichageDesVies(scene) {
 }
 
 function mettreAJourAffichageDesVies() {
+  // Affiche seulement le nombre de vies restantes.
   for (var i = 0; i < lifeIcons.length; i++) {
     lifeIcons[i].setVisible(i < currentLives);
   }
 }
 
 function changerVisibiliteDesVies(estVisible) {
+  // Utilise pour cacher les vies pendant l'accueil ou les ecrans speciaux.
   for (var i = 0; i < lifeIcons.length; i++) {
     lifeIcons[i].setVisible(estVisible && i < currentLives);
   }
