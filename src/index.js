@@ -1,6 +1,7 @@
 // chargement des librairies
 
 var player;
+var platforms;
 
 /***********************************************************************/
 /** CONFIGURATION GLOBALE DU JEU ET LANCEMENT 
@@ -19,7 +20,7 @@ var config = {
       gravity: {
         y: 300 // gravité verticale : acceleration ddes corps en pixels par seconde
       },
-      debug: false // permet de voir les hitbox et les vecteurs d'acceleration quand mis à true
+      debug: true // permet de voir les hitbox et les vecteurs d'acceleration quand mis à true
     }
   },
   scene: {
@@ -74,10 +75,40 @@ function create() {
 
   fond.setScale(echelle);
 
+  // Les collisions sont posees a la main avec des rectangles invisibles
+  // pour rester simples a comprendre et a regler.
+  platforms = this.physics.add.staticGroup();
+
+  function ajouterPlateforme(scene, x, y, largeur, hauteur) {
+    var plateforme = scene.add.rectangle(x, y, largeur, hauteur, 0xff0000, 0);
+
+    scene.physics.add.existing(plateforme, true);
+    platforms.add(plateforme);
+  }
+
+  ajouterPlateforme(this, 400, 574, 525, 20);
+  ajouterPlateforme(this, 381, 497, 487, 20);
+  ajouterPlateforme(this, 419, 420, 487, 20);
+  ajouterPlateforme(this, 381, 342, 487, 20);
+  ajouterPlateforme(this, 419, 264, 487, 20);
+  ajouterPlateforme(this, 381, 206, 487, 20);
+  ajouterPlateforme(this, 400, 140, 111, 20
+  );
+
   // Cree Mario avec la physique Arcade, sans mouvement pour ce sous-jalon.
-  player = this.physics.add.sprite(140, 120, "mario", 0);
-  player.setScale(0.6);
+  player = this.physics.add.sprite(180, 548, "mario", 0);
+  player.setScale(0.45);
+  // Notion Phaser en plus du cours : setOrigin permet ici d'aligner le bas
+  // du sprite avec le haut de la plateforme.
+  player.setOrigin(0.5, 1);
+  // Notion Phaser en plus du cours : on ajuste la hitbox pour qu'elle colle
+  // mieux au petit sprite redimensionne.
+  player.body.setSize(26, 24);
+  player.body.setOffset(13, 47);
   player.setCollideWorldBounds(true);
+
+  // Empeche Mario de traverser les poutres du niveau.
+  this.physics.add.collider(player, platforms);
 }
 
 /***********************************************************************/
