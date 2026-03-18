@@ -990,7 +990,7 @@ function atteindrePauline() {
     isGameOver = true;
     player.body.enable = false;
     statusText.setText("");
-    afficherEcranDeFin("YOU WIN", "5 passages chez Pauline\nScore " + formaterScore(totalScore));
+    afficherEcranDeFin("YOU WIN", "5 passages chez Bérengère\nScore " + formaterScore(totalScore));
     return;
   }
 
