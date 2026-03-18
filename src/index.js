@@ -2,6 +2,7 @@
 
 var player;
 var platforms;
+var cursors;
 
 /***********************************************************************/
 /** CONFIGURATION GLOBALE DU JEU ET LANCEMENT 
@@ -109,6 +110,9 @@ function create() {
 
   // Empeche Mario de traverser les poutres du niveau.
   this.physics.add.collider(player, platforms);
+
+  // Cree les controles clavier pour le deplacement horizontal.
+  cursors = this.input.keyboard.createCursorKeys();
 }
 
 /***********************************************************************/
@@ -116,5 +120,15 @@ function create() {
 /***********************************************************************/
 
 function update() {
- 
+  if (cursors.left.isDown) {
+    player.setVelocityX(-160);
+    player.setFlipX(false);
+  } else if (cursors.right.isDown) {
+    player.setVelocityX(160);
+    // Notion Phaser en plus du cours : setFlipX retourne le sprite
+    // horizontalement sans avoir besoin d'une deuxieme image.
+    player.setFlipX(true);
+  } else {
+    player.setVelocityX(0);
+  }
 }
