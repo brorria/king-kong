@@ -131,4 +131,10 @@ function update() {
   } else {
     player.setVelocityX(0);
   }
+
+  // Le saut reste volontairement simple : Mario saute seulement s'il est pose
+  // sur une plateforme, ce qui evite le double saut infini.
+  if (cursors.up.isDown && player.body.blocked.down) {
+    player.setVelocityY(-260);
+  }
 }
