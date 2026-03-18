@@ -31,7 +31,7 @@ var endHintText;
 
 var GAME_WIDTH = 800;
 var GAME_HEIGHT = 600;
-var MOVE_SPEED = 160;
+var MOVE_SPEED = 120;
 var JUMP_SPEED = -165;
 var CLIMB_SPEED = 120;
 var INTRO_DURATION = 1800;
@@ -651,15 +651,15 @@ function afficherEcranDeFin(titre, sousTitre) {
 }
 
 function creerAffichageDesVies(scene) {
-  var startX = 83;
-  var startY = 74;
-  var gap = 24;
+  var startX = 165;
+  var startY = 66;
+  var gap = 20;
 
   lifeIcons = [];
 
   for (var i = 0; i < 3; i++) {
     var lifeIcon = scene.add.image(startX + i * gap, startY, "lifeMario");
-    lifeIcon.setScale(0.32);
+    lifeIcon.setScale(0.35);
     lifeIcons.push(lifeIcon);
   }
 }
