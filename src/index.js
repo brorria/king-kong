@@ -14,6 +14,7 @@ var platformCollider;
 var debugMode = true;
 var donkeyKong;
 var pauline;
+var barrelStackDisplay;
 var paulineGoal;
 var barrels;
 var barrelTimer;
@@ -27,8 +28,13 @@ var MOVE_SPEED = 160;
 var JUMP_SPEED = -165;
 var CLIMB_SPEED = 120;
 var INTRO_DURATION = 1800;
+var FIRST_BARREL_DELAY = 1000;
 var BARREL_SPEED = 90;
-var BARREL_DELAY = 2200;
+var BARREL_DELAY = 2000;
+var BARREL_SPAWN_OFFSET_X = 45;
+var BARREL_SPAWN_OFFSET_Y = 22;
+var LADDER_TILE_WIDTH = 39;
+var LADDER_TILE_HEIGHT = 54;
 
 /***********************************************************************/
 /** CONFIGURATION GLOBALE DU JEU ET LANCEMENT 
@@ -74,15 +80,20 @@ function preload() {
   // Charge le vrai sprite de la map pour construire ensuite le prototype dessus.
   this.load.image("niveau1", "src/asset/vrai map 1.png");
   this.load.image("introNiveau1", "src/asset/vrai map 1.png");
-  this.load.image("ladder", "src/asset/echelle avec arrière-plan supprimé.png");
+  this.load.image("ladder", "src/asset/echelle donke kong (3).png");
   this.load.image("barrelLaunch", "src/asset/barel-normal avec arrière-plan supprimé.png");
+  this.load.image("barrelStack", "src/asset/barel-normal-x4 avec arrière-plan supprimé.png");
   this.load.spritesheet("barrelRoll", "src/asset/barel-normal-lancé avec arrière-plan supprimé.png", {
     frameWidth: 90,
     frameHeight: 74
   });
-  this.load.spritesheet("dk", "src/asset/king-kong-lance+pose avec arrière-plan supprimé.png", {
+  this.load.spritesheet("dkThrow", "src/asset/king-kong-lance+pose avec arrière-plan supprimé.png", {
     frameWidth: 191,
     frameHeight: 164
+  });
+  this.load.spritesheet("dkTurn", "src/asset/king-kong-right+left avec arrière-plan supprimé.png", {
+    frameWidth: 195,
+    frameHeight: 148
   });
   this.load.spritesheet("pauline", "src/asset/princesse avec arrière-plan supprimé.png", {
     frameWidth: 114,
@@ -121,11 +132,14 @@ function create() {
 
   // Place les personnages principaux avec un recadrage simple pour
   // n'afficher qu'une seule pose utile de chaque planche de sprites.
-  donkeyKong = this.add.sprite(218, 158, "dk", 1);
+  donkeyKong = this.add.sprite(236, 158, "dkTurn", 0);
   donkeyKong.setScale(0.48);
 
   pauline = this.add.sprite(361, 110, "pauline", 0);
-  pauline.setScale(0.3);
+  pauline.setScale(0.35);
+
+  barrelStackDisplay = this.add.image(168, 154, "barrelStack");
+  barrelStackDisplay.setScale(0.46);
 
   paulineGoal = this.add.rectangle(361, 121, 26, 36, 0x00ff00, 0);
   this.physics.add.existing(paulineGoal, true);
@@ -136,6 +150,31 @@ function create() {
     frameRate: 10,
     repeat: -1
   });
+
+  this.anims.create({
+    key: "dk-gameplay",
+    // Notion Phaser en plus du cours : une animation peut melanger
+    // des frames venant de plusieurs spritesheets differentes.
+    frames: [
+      { key: "dkTurn", frame: 0 },
+      { key: "dkThrow", frame: 1 },
+      { key: "dkTurn", frame: 1 },
+      { key: "dkThrow", frame: 0 }
+    ],
+    frameRate: 2,
+    repeat: -1
+  });
+
+  this.anims.create({
+    key: "pauline-intro",
+    frames: this.anims.generateFrameNumbers("pauline", { start: 0, end: 4 }),
+    frameRate: 4,
+    repeat: -1,
+    yoyo: true
+  });
+
+  donkeyKong.anims.play("dk-gameplay");
+  pauline.anims.play("pauline-intro");
 
   statusText = this.add.text(18, 18, "", {
     fontSize: "18px",
@@ -181,7 +220,7 @@ function create() {
     var centerX = mapOffsetX + (x + largeur / 2) * echelle;
     var centerY = mapOffsetY + (y + hauteur / 2) * echelle;
     var ladderZone = scene.add.rectangle(centerX, centerY, (largeur - 8) * echelle, hauteur * echelle, 0, 0);
-    var tileHeight = 18;
+    var tileHeight = LADDER_TILE_HEIGHT;
     var tileCount = Math.max(1, Math.ceil(hauteur / tileHeight));
 
     scene.physics.add.existing(ladderZone, true);
@@ -195,12 +234,12 @@ function create() {
       }
 
       var ladderSprite = scene.add.image(
-        mapOffsetX + (x + largeur / 2) * echelle,
-        mapOffsetY + tileY * echelle,
+        centerX,
+        centerY,
         "ladder"
       );
 
-      ladderSprite.setDisplaySize((largeur - 8) * echelle, tileHeight * echelle);
+      ladderSprite.setDisplaySize(LADDER_TILE_WIDTH * echelle, tileHeight * echelle);
     }
   }
 
@@ -285,12 +324,10 @@ function create() {
 
   // L'intro affiche d'abord une image complete du debut avant de lancer
   // la map jouable actuelle.
-  introMap = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "introNiveau1");
-  introMap.setScale(Math.min(GAME_WIDTH / introMap.width, GAME_HEIGHT / introMap.height));
-
   gameplayMap.setVisible(false);
   donkeyKong.setVisible(false);
   pauline.setVisible(false);
+  barrelStackDisplay.setVisible(false);
   statusText.setVisible(false);
   player.setVisible(false);
   player.body.enable = false;
@@ -304,12 +341,16 @@ function create() {
     ladder.body.enable = false;
   });
 
+  introMap = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "introNiveau1");
+  introMap.setScale(Math.min(GAME_WIDTH / introMap.width, GAME_HEIGHT / introMap.height));
+
   this.time.delayedCall(INTRO_DURATION, function () {
     isIntroPlaying = false;
     introMap.destroy();
     gameplayMap.setVisible(true);
     donkeyKong.setVisible(true);
     pauline.setVisible(true);
+    barrelStackDisplay.setVisible(true);
     statusText.setVisible(true);
     player.setVisible(true);
     player.body.enable = true;
@@ -323,10 +364,17 @@ function create() {
       ladder.body.enable = true;
     });
 
-    barrelTimer = sceneRef.time.addEvent({
-      delay: BARREL_DELAY,
-      loop: true,
-      callback: lancerBaril
+    // On relance l'animation ici pour la caler au debut du rythme des tonneaux.
+    donkeyKong.anims.restart();
+
+    sceneRef.time.delayedCall(FIRST_BARREL_DELAY, function () {
+      lancerBaril();
+
+      barrelTimer = sceneRef.time.addEvent({
+        delay: BARREL_DELAY,
+        loop: true,
+        callback: lancerBaril
+      });
     });
   });
 }
@@ -455,7 +503,13 @@ function lancerBaril() {
     return;
   }
 
-  var barrel = barrels.create(donkeyKong.x + 14, donkeyKong.y + 6, "barrelLaunch");
+  // Le point de sortie est decale pour que le baril parte
+  // de la main de Donkey Kong sur la derniere frame de lancer.
+  var barrel = barrels.create(
+    donkeyKong.x + BARREL_SPAWN_OFFSET_X,
+    donkeyKong.y + BARREL_SPAWN_OFFSET_Y,
+    "barrelLaunch"
+  );
 
   barrel.setDisplaySize(28, 20);
   barrel.setOrigin(0.5, 1);
