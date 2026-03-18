@@ -19,10 +19,16 @@ var barrelStackDisplay;
 var paulineGoal;
 var barrels;
 var barrelTimer;
+var firstBarrelTimer;
 var statusText;
-var hasWon = false;
+var scoreText;
 var isGameOver = false;
 var currentLives = 3;
+var currentRound = 1;
+var speedMultiplier = 1;
+var targetRounds = 5;
+var totalScore = 0;
+var roundStartTime = 0;
 var lifeIcons = [];
 var isRespawning = false;
 var barrelBeams = [];
@@ -259,6 +265,11 @@ function create() {
     color: "#ffffff"
   });
 
+  scoreText = this.add.text(180, 25, "000000", {
+    fontSize: "22px",
+    color: "#ffffff"
+  });
+
   creerAffichageDesVies(this);
 
   // Notion Phaser en plus du cours : setDepth permet d'afficher
@@ -474,6 +485,7 @@ function create() {
     pauline.setVisible(false);
     barrelStackDisplay.setVisible(false);
     statusText.setVisible(false);
+    scoreText.setVisible(false);
     changerVisibiliteDesVies(false);
     player.setVisible(false);
     player.body.enable = false;
@@ -502,12 +514,14 @@ function create() {
     startScreenImage.setVisible(false);
     startScreenDonkeyKong.setVisible(false);
     statusText.setVisible(true);
+    scoreText.setVisible(true);
     changerVisibiliteDesVies(true);
     player.setVisible(true);
     player.body.enable = true;
     player.setPosition(PLAYER_START_X, PLAYER_START_Y);
     player.setTexture("marioStand");
     player.setScale(0.45);
+    roundStartTime = sceneRef.time.now;
 
     platforms.children.iterate(function (plateforme) {
       plateforme.body.enable = true;
@@ -518,18 +532,9 @@ function create() {
       ladder.body.enable = true;
     });
 
-    // On relance l'animation ici pour la caler au debut du rythme des tonneaux.
     donkeyKong.anims.restart();
-
-    sceneRef.time.delayedCall(FIRST_BARREL_DELAY, function () {
-      lancerBaril();
-
-      barrelTimer = sceneRef.time.addEvent({
-        delay: BARREL_DELAY,
-        loop: true,
-        callback: lancerBaril
-      });
-    });
+    appliquerVitesseDeJeu();
+    relancerCycleDesBarils();
   }
 
   function jouerSceneOuverture() {
@@ -589,6 +594,7 @@ function create() {
   startButtonText.on("pointerdown", demarrerSequenceDebut);
   startScreenImage.on("pointerdown", demarrerSequenceDebut);
   this.input.keyboard.on("keydown-SPACE", demarrerSequenceDebut);
+  this.input.keyboard.on("keydown-R", relancerPartie);
 
   masquerNiveauPourOuverture();
   afficherMenuDebut();
@@ -600,12 +606,6 @@ function create() {
 
 function update() {
   if (isIntroPlaying) {
-    return;
-  }
-
-  if (hasWon) {
-    player.setVelocityX(0);
-    player.setVelocityY(0);
     return;
   }
 
@@ -721,21 +721,21 @@ function mettreAJourBarils() {
         (poutreBaril.direction < 0 && barrel.x <= poutreBaril.xStart + BARREL_EDGE_MARGIN)
       ) {
         barrel.setData("isDropping", true);
-        barrel.setVelocityX(poutreBaril.direction * BARREL_DROP_SPEED_X);
+        barrel.setVelocityX(poutreBaril.direction * BARREL_DROP_SPEED_X * speedMultiplier);
       } else {
         barrel.setData("isDropping", false);
-        barrel.setVelocityX(poutreBaril.direction * BARREL_SPEED);
+        barrel.setVelocityX(poutreBaril.direction * BARREL_SPEED * speedMultiplier);
       }
 
       barrel.setAngularVelocity(0);
     } else if (barrel.getData("isDropping")) {
-      barrel.setVelocityX(poutreBaril.direction * BARREL_DROP_SPEED_X);
+      barrel.setVelocityX(poutreBaril.direction * BARREL_DROP_SPEED_X * speedMultiplier);
     }
   });
 }
 
 function lancerBaril() {
-  if (isIntroPlaying || hasWon) {
+  if (isIntroPlaying || isGameOver) {
     return;
   }
 
@@ -754,7 +754,7 @@ function lancerBaril() {
   barrel.setCollideWorldBounds(false);
   barrel.setData("isRolling", false);
   barrel.setData("isDropping", false);
-  barrel.setVelocityX(BARREL_SPEED);
+  barrel.setVelocityX(BARREL_SPEED * speedMultiplier);
 }
 
 function getBarrelBeam(x, y) {
@@ -813,21 +813,27 @@ function toucherBaril(playerSprite, barrel) {
 }
 
 function atteindrePauline() {
-  hasWon = true;
-  statusText.setText("");
-  player.body.enable = false;
-  afficherEcranDeFin("YOU WIN", "Pauline est atteinte");
-
-  if (barrelTimer) {
-    barrelTimer.remove(false);
+  if (currentRound >= targetRounds) {
+    ajouterScoreDeTour();
+    isGameOver = true;
+    player.body.enable = false;
+    statusText.setText("");
+    afficherEcranDeFin("YOU WIN", "5 passages chez Pauline\nScore " + formaterScore(totalScore));
+    return;
   }
+
+  ajouterScoreDeTour();
+  currentRound += 1;
+  speedMultiplier += 0.5;
+  statusText.setText("Round " + currentRound + " - vitesse x" + speedMultiplier.toFixed(1));
+  redemarrerDepuisLeDebut();
 }
 
 function afficherEcranDeFin(titre, sousTitre) {
   endScreen.setVisible(true);
   endTitleText.setText(titre);
   endTitleText.setVisible(true);
-  endHintText.setText(sousTitre);
+  endHintText.setText(sousTitre + "\nPress R to restart");
   endHintText.setVisible(true);
 
   if (barrelTimer) {
@@ -842,6 +848,148 @@ function afficherEcranDeFin(titre, sousTitre) {
     barrel.setVelocity(0, 0);
     barrel.body.enable = false;
   });
+}
+
+function redemarrerDepuisLeDebut() {
+  isClimbing = false;
+  isRespawning = false;
+  player.body.enable = true;
+  player.body.allowGravity = true;
+  player.setVisible(true);
+  player.setVelocity(0, 0);
+  player.setPosition(PLAYER_START_X, PLAYER_START_Y);
+  player.setTexture("marioStand");
+  player.setScale(0.45);
+  roundStartTime = sceneRef.time.now;
+
+  barrels.children.iterate(function (barrel) {
+    if (!barrel) {
+      return;
+    }
+
+    barrel.destroy();
+  });
+
+  appliquerVitesseDeJeu();
+  relancerCycleDesBarils();
+}
+
+function appliquerVitesseDeJeu() {
+  donkeyKong.anims.timeScale = 1;
+}
+
+function relancerCycleDesBarils() {
+  if (firstBarrelTimer) {
+    firstBarrelTimer.remove(false);
+  }
+
+  if (barrelTimer) {
+    barrelTimer.remove(false);
+  }
+
+  firstBarrelTimer = sceneRef.time.delayedCall(FIRST_BARREL_DELAY, function () {
+    lancerBaril();
+    firstBarrelTimer = null;
+
+    barrelTimer = sceneRef.time.addEvent({
+      delay: BARREL_DELAY,
+      loop: true,
+      callback: lancerBaril
+    });
+  });
+}
+
+function relancerPartie() {
+  isGameOver = false;
+  isIntroPlaying = false;
+  isRespawning = false;
+  isClimbing = false;
+  currentLives = 3;
+  currentRound = 1;
+  speedMultiplier = 1;
+  totalScore = 0;
+  roundStartTime = sceneRef.time.now;
+
+  endScreen.setVisible(false);
+  endTitleText.setVisible(false);
+  endHintText.setVisible(false);
+  startScreenImage.setVisible(false);
+  startScreenDonkeyKong.setVisible(false);
+  startMenuOverlay.setVisible(false);
+  startButtonBg.setVisible(false);
+  startButtonText.setVisible(false);
+
+  gameplayMap.setVisible(true);
+  donkeyKong.setVisible(true);
+  pauline.setVisible(true);
+  barrelStackDisplay.setVisible(true);
+  statusText.setVisible(true);
+  scoreText.setVisible(true);
+  statusText.setText("");
+  changerVisibiliteDesVies(true);
+
+  platforms.children.iterate(function (plateforme) {
+    plateforme.body.enable = true;
+  });
+
+  ladders.children.iterate(function (ladder) {
+    ladder.setVisible(true);
+    ladder.body.enable = true;
+  });
+
+  mettreAJourAffichageDesVies();
+  player.setVisible(true);
+  player.body.enable = true;
+  player.body.allowGravity = true;
+  player.setVelocity(0, 0);
+  player.setPosition(PLAYER_START_X, PLAYER_START_Y);
+  player.setTexture("marioStand");
+  player.setScale(0.45);
+  donkeyKong.anims.restart();
+
+  if (firstBarrelTimer) {
+    firstBarrelTimer.remove(false);
+    firstBarrelTimer = null;
+  }
+
+  if (barrelTimer) {
+    barrelTimer.remove(false);
+    barrelTimer = null;
+  }
+
+  barrels.children.iterate(function (barrel) {
+    if (!barrel) {
+      return;
+    }
+
+    barrel.destroy();
+  });
+
+  appliquerVitesseDeJeu();
+  mettreAJourAffichageDuScore();
+  relancerCycleDesBarils();
+}
+
+function ajouterScoreDeTour() {
+  var tempsEnSecondes = Math.max(1, Math.floor((sceneRef.time.now - roundStartTime) / 1000));
+  var scoreDuTour = Math.floor((currentRound * 100000) / tempsEnSecondes);
+
+  totalScore += scoreDuTour;
+  mettreAJourAffichageDuScore();
+}
+
+function mettreAJourAffichageDuScore() {
+  scoreText.setText(formaterScore(totalScore));
+}
+
+function formaterScore(score) {
+  var texte = String(score);
+
+  while (texte.length < 6) {
+    texte = "0" + texte;
+  }
+
+  return texte;
 }
 
 function creerAffichageDesVies(scene) {
